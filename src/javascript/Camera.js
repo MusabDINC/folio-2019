@@ -33,6 +33,7 @@ export default class Camera
         this.setZoom()
         this.setPan()
         this.setOrbitControls()
+        this.setCameraModes()
     }
 
     setAngle()
@@ -79,6 +80,27 @@ export default class Camera
         this.instance.lookAt(new THREE.Vector3())
         this.container.add(this.instance)
 
+        // RC kamera için tilt/eğim değerleri
+        this.rcCameraTilt = {
+            current: 0,
+            target: 0,
+            easing: 0.05,
+            max: Math.PI * 0.05 // maksimum 5 derece eğim
+        }
+        
+        // RC kamera titreşimi için değerler
+        this.rcCameraShake = {
+            enabled: true,
+            intensity: 0.002, // titreşim yoğunluğu
+            speedFactor: 0, // hıza bağlı faktör
+            xNoise: Math.random() * 1000, // rastgele başlangıç değerleri
+            yNoise: Math.random() * 1000,
+            zNoise: Math.random() * 1000
+        }
+        
+        // RC kamera offset (kaputun tam üstünde olması için)
+        this.rcCameraOffset = new THREE.Vector3(0, 0, 0)
+
         // Resize event
         this.sizes.on('resize', () =>
         {
@@ -101,9 +123,99 @@ export default class Camera
                 // Look at target
                 this.instance.lookAt(this.targetEased)
 
-                // Apply pan
-                this.instance.position.x += this.pan.value.x
-                this.instance.position.y += this.pan.value.y
+                // RC kamera efekti için - 1. şahıs moddaysa ve araba varsa
+                if (this.activeMode === 'firstPerson') {
+                    // Arabayı al (window.application.world.car'a erişebiliriz)
+                    const car = window.application?.world?.car;
+                    
+                    if (car && car.chassis) {
+                        // Arabadan dönüş verisini al (yatay dönüş açısı - z ekseni etrafında)
+                        const rotation = car.chassis.object.rotation.z;
+                        
+                        // Araç fizikleri ve hareket verilerini al
+                        const turnSpeed = car.movement?.localAcceleration?.y || 0;
+                        const forwardSpeed = Math.abs(car.movement?.localSpeed?.x || 0);
+                        
+                        // Dönüş hızına göre kamera eğimi - viraj efekti
+                        this.rcCameraTilt.target = -turnSpeed * 0.4; // dönüşün tersi yönünde daha güçlü eğim
+                        
+                        // Eğim değerini sınırla
+                        this.rcCameraTilt.target = Math.max(
+                            -this.rcCameraTilt.max, 
+                            Math.min(this.rcCameraTilt.max, this.rcCameraTilt.target)
+                        );
+                        
+                        // Eğim değerini yumuşat
+                        this.rcCameraTilt.current += (this.rcCameraTilt.target - this.rcCameraTilt.current) * this.rcCameraTilt.easing;
+                        
+                        // Titreşim yoğunluğunu hıza göre ayarla (motor titreşim efekti)
+                        this.rcCameraShake.speedFactor = Math.min(forwardSpeed * 0.1, 1.0);
+                        
+                        // Perlin noise benzeri bir efekt ile rastgele titreşim ekle (motor titreşim efekti)
+                        if (this.rcCameraShake.enabled && this.rcCameraShake.speedFactor > 0.1) {
+                            // Zamanla ilerleyen gürültü değerleri
+                            this.rcCameraShake.xNoise += 0.01;
+                            this.rcCameraShake.yNoise += 0.01;
+                            this.rcCameraShake.zNoise += 0.007;
+                            
+                            // Sinüs fonksiyonlarını kullanarak doğal titreşim efekti
+                            const shakeX = Math.sin(this.rcCameraShake.xNoise) * this.rcCameraShake.intensity * this.rcCameraShake.speedFactor;
+                            const shakeY = Math.sin(this.rcCameraShake.yNoise) * this.rcCameraShake.intensity * this.rcCameraShake.speedFactor;
+                            const shakeZ = Math.sin(this.rcCameraShake.zNoise) * this.rcCameraShake.intensity * this.rcCameraShake.speedFactor;
+                            
+                            // Titreşimi kamera pozisyonuna uygula
+                            this.instance.position.x += shakeX;
+                            this.instance.position.y += shakeY;
+                            this.instance.position.z += shakeZ;
+                        }
+                        
+                        // Kamerayı araba şasisi pozisyonuna yerleştir
+                        this.instance.position.copy(car.chassis.object.position);
+                        
+                        // Kaput üzerindeki pozisyonu ayarla - kaputun tam üstünde olması için
+                        // RC Camera pozisyon düzeltmesi (kaputun tam üstünde)
+                        this.rcCameraOffset.set(0.63, 0, 0.52); // X: Daha öne (kaputa doğru), Z: Daha yukarı
+                        
+                        // Offset'i aracın dönüşüne göre döndür
+                        this.rcCameraOffset.applyQuaternion(car.chassis.object.quaternion);
+                        
+                        // Ofset'i uygulamadan önce, şasi offset'ini ekle
+                        if (car.chassis.offset) {
+                            this.instance.position.add(car.chassis.offset);
+                        }
+                        
+                        // Offset'i uygula 
+                        this.instance.position.add(this.rcCameraOffset);
+                        
+                        // Kameranın bakış yönünü ayarla (araba ön kısmı yönünde)
+                        const lookAtTarget = car.chassis.object.position.clone();
+                        // Bakış noktasını arabanın önüne doğru kaydır
+                        const lookDirection = new THREE.Vector3(1, 0, 0); // Aracın ön yönü
+                        lookDirection.applyQuaternion(car.chassis.object.quaternion);
+                        lookDirection.multiplyScalar(10); // Bakış yönünde uzağa bak
+                        
+                        lookAtTarget.add(lookDirection);
+                        lookAtTarget.add(car.chassis.offset); // Şasi offset'ini ekle
+                        
+                        // Kamerayı bakış noktasına yönelt
+                        this.instance.lookAt(lookAtTarget);
+                        
+                        // Sadece viraj eğimini ekle (x ekseni etrafında eğim)
+                        this.instance.rotation.x += this.rcCameraTilt.current; // Viraj eğimini ekle
+                        
+                        // Araç hızına göre hafif FOV (Field of View) efekti - hızlandıkça görüş açısı genişler
+                        const baseFOV = 40;
+                        const speedFactor = forwardSpeed * 0.4; // daha az baskın bir hız efekti
+                        this.instance.fov = baseFOV + speedFactor;
+                        this.instance.updateProjectionMatrix();
+                    }
+                }
+
+                // Apply pan - 1. şahıs modda pan'ı uygulamıyoruz
+                if (this.activeMode !== 'firstPerson') {
+                    this.instance.position.x += this.pan.value.x
+                    this.instance.position.y += this.pan.value.y
+                }
             }
         })
     }
@@ -343,5 +455,154 @@ export default class Camera
         {
             this.debugFolder.add(this.orbitControls, 'enabled').name('orbitControlsEnabled')
         }
+    }
+
+    /**
+     * Kamera modlarını ayarla
+     */
+    setCameraModes() {
+        // Kamera modları
+        this.modes = {
+            thirdPerson: {
+                active: true,
+                angle: this.angle.value.clone(),
+                easing: this.easing,
+                distance: this.zoom.minDistance,
+                height: 0
+            },
+            firstPerson: {
+                active: false,
+                angle: new THREE.Vector3(0, 0, 0), // Düz bakış açısı
+                easing: 0.1,
+                distance: 0.1, // Araç ile kamera arasında çok az mesafe
+                height: 0.5 // Kaput yüksekliği
+            },
+            free: {
+                active: false,
+                angle: new THREE.Vector3(0, -1, 1.5), // Yukarıdan bakış
+                easing: 0.05,
+                distance: this.zoom.minDistance + 10,
+                height: 5
+            }
+        }
+
+        // Aktif mod
+        this.activeMode = 'thirdPerson'
+    }
+
+    /**
+     * Kamera modunu ayarla
+     * @param {string} mode - Kamera modu ('thirdPerson', 'firstPerson', 'free')
+     */
+    setMode(mode) {
+        // Modu kontrol et
+        if (!this.modes[mode]) {
+            console.error(`Geçersiz kamera modu: ${mode}`)
+            return
+        }
+
+        // Önceki mod
+        const prevMode = this.activeMode;
+        
+        // Önceki modu devre dışı bırak
+        if (this.modes[this.activeMode]) {
+            this.modes[this.activeMode].active = false
+        }
+
+        // Yeni modu etkinleştir
+        this.modes[mode].active = true
+        this.activeMode = mode
+
+        // Kamera özelliklerini ayarla
+        const modeSettings = this.modes[mode]
+        
+        // 1. şahıs moduna geçiyorsa daha hızlı, diğer modlara daha yumuşak geçiş
+        const transitionDuration = mode === 'firstPerson' ? 0.5 : 1.5;
+        
+        // Açı değerini güncelle - smooth geçiş için gsap kullan
+        gsap.to(this.angle.value, {
+            x: modeSettings.angle.x,
+            y: modeSettings.angle.y,
+            z: modeSettings.angle.z,
+            duration: transitionDuration,
+            ease: 'power2.inOut'
+        })
+        
+        // Easing ayarı
+        this.easing = modeSettings.easing
+        
+        // Zoom ayarlarını güncelle
+        gsap.to(this.zoom, { 
+            minDistance: modeSettings.distance,
+            amplitude: mode === 'firstPerson' ? 0.1 : 5, // 1. şahıs modunda çok daha az zoom aralığı
+            duration: transitionDuration,
+            ease: 'power2.inOut'
+        })
+        
+        // 1. şahıs modunda eğer araç varsa, kamera yüksekliğini ayarla
+        if (mode === 'firstPerson') {
+            // Pan'ı sıfırla - 1. şahıs modunda kaydırma olmasın
+            this.pan.reset()
+            this.pan.disable()
+            
+            // Kamera hedef yükseklik ayarı (z ekseninde)
+            if (this.target) {
+                gsap.to(this.target, {
+                    z: modeSettings.height,
+                    duration: transitionDuration * 0.5, // Daha hızlı yükseklik değişimi
+                    ease: 'power1.out'
+                })
+            }
+            
+            // RC kamera titreşimini aktifleştir
+            this.rcCameraShake.enabled = true;
+            
+        } else {
+            // Diğer modlarda kamera hedefini normal yüksekliğe döndür
+            this.pan.enable()
+            
+            // RC kamera titreşimini devre dışı bırak
+            this.rcCameraShake.enabled = false;
+            
+            if (this.target) {
+                gsap.to(this.target, {
+                    z: 0,
+                    duration: transitionDuration,
+                    ease: 'power2.inOut'
+                })
+            }
+        }
+        
+        // Debug için güncelle
+        if (this.debug) {
+            for (const key in this.debugFolder.__folders) {
+                if (this.debugFolder.__folders[key].__controllers) {
+                    for (const controller of this.debugFolder.__folders[key].__controllers) {
+                        controller.updateDisplay()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 3. şahıs kamera modunu etkinleştir
+     */
+    setThirdPersonMode() {
+        this.setMode('thirdPerson')
+    }
+
+    /**
+     * 1. şahıs kamera modunu etkinleştir
+     */
+    setFirstPersonMode() {
+        this.setMode('firstPerson')
+    }
+
+    /**
+     * Serbest kamera modunu etkinleştir
+     */
+    setFreeMode() {
+        this.setMode('free')
     }
 }

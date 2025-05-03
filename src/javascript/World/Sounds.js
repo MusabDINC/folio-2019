@@ -147,6 +147,30 @@ export default class Sounds
                 volumeMax: 1,
                 rateMin: 0.75,
                 rateMax: 1
+            },
+            // Bisiklet zil sesi (gerçekte olmayan bir ses, car-horn-2'yi kullanıyoruz)
+            {
+                name: 'bell',
+                sounds: ['./sounds/car-horns/car-horn-2.mp3'],
+                minDelta: 300,
+                velocityMin: 0,
+                velocityMultiplier: 1,
+                volumeMin: 0.65,
+                volumeMax: 0.85,
+                rateMin: 1.8, // Zil daha tiz bir ses olduğu için daha yüksek frekans
+                rateMax: 2.2
+            },
+            // Forklift hidrolik kaldırma sesi (gerçekte olmayan bir ses, mevcut seslerden yapılandırılıyor)
+            {
+                name: 'hydraulic',
+                sounds: ['./sounds/car-hits/car-hit-3.mp3'],
+                minDelta: 150,
+                velocityMin: 0,
+                velocityMultiplier: 1,
+                volumeMin: 0.3,
+                volumeMax: 0.6,
+                rateMin: 0.25, // Çok düşük hız - daha düşük frekanslı bir ses
+                rateMax: 0.35
             }
         ]
 

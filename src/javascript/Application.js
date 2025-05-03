@@ -7,6 +7,7 @@ import World from './World/index.js'
 import Resources from './Resources.js'
 import Camera from './Camera.js'
 import ThreejsJourney from './ThreejsJourney.js'
+import UI from './UI.js'
 
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -232,6 +233,37 @@ export default class Application
             passes: this.passes
         })
         this.scene.add(this.world.container)
+        
+        // UI'ı hemen oluştur, yükleme durumuna bağlı olmadan
+        this.setUI()
+        
+        // Kaynaklar hazır olduğunda da UI elemanlarını güncelle
+        this.resources.on('ready', () => {
+            if (this.ui) {
+                this.ui.forceShowUI()
+            } else {
+                // UI henüz oluşturulmadıysa yeniden oluştur
+                this.setUI()
+            }
+        })
+    }
+
+    /**
+     * Set UI
+     */
+    setUI()
+    {
+        try {
+            console.log('Creating UI...')
+            this.ui = new UI({
+                vehicleManager: this.world.vehicleManager,
+                camera: this.camera,
+                debug: this.debug
+            })
+            console.log('UI created successfully')
+        } catch (error) {
+            console.error('UI oluşturulurken hata:', error)
+        }
     }
 
     /**

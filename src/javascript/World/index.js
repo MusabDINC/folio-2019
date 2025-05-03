@@ -5,7 +5,7 @@ import Shadows from './Shadows.js'
 import Physics from './Physics.js'
 import Zones from './Zones.js'
 import Objects from './Objects.js'
-import Car from './Car.js'
+import VehicleManager from './VehicleManager.js'
 import Areas from './Areas.js'
 import Tiles from './Tiles.js'
 import Walls from './Walls.js'
@@ -380,7 +380,7 @@ export default class World
 
     setCar()
     {
-        this.car = new Car({
+        this.vehicleManager = new VehicleManager({
             time: this.time,
             resources: this.resources,
             objects: this.objects,
@@ -391,10 +391,20 @@ export default class World
             sounds: this.sounds,
             renderer: this.renderer,
             camera: this.camera,
-            debug: this.debugFolder,
+            debug: this.debug,
             config: this.config
         })
-        this.container.add(this.car.container)
+        this.container.add(this.vehicleManager.container)
+        
+        // Klavye kısayolunu ayarla
+        this.vehicleManager.setupKeyboardShortcut()
+        
+        // Car özelliğini, VehicleManager'daki aktif araç için alias olarak ayarla
+        Object.defineProperty(this, 'car', {
+            get: function() {
+                return this.vehicleManager.activeVehicle ? this.vehicleManager.activeVehicle.instance : null;
+            }
+        });
     }
 
     setSections()

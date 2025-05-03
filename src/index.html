@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,6 +41,26 @@
 <body>
 
     <canvas class="canvas js-canvas"></canvas>
+
+    <!-- Araç seçimi dropdown menüsü -->
+    <div class="vehicle-selector js-vehicle-selector">
+        <button class="vehicle-selector-toggle js-vehicle-selector-toggle">Araç Seç</button>
+        <div class="vehicle-selector-dropdown">
+            <button class="vehicle-option active" data-vehicle="car">Araba</button>
+            <button class="vehicle-option" data-vehicle="bicycle">Bisiklet</button>
+            <button class="vehicle-option" data-vehicle="forklift">Forklift</button>
+        </div>
+    </div>
+
+    <!-- Kamera modu seçimi -->
+    <div class="camera-selector js-camera-selector">
+        <button class="camera-selector-toggle js-camera-selector-toggle">Kamera</button>
+        <div class="camera-selector-dropdown">
+            <button class="camera-option active" data-camera="thirdPerson">3. Şahıs</button>
+            <button class="camera-option" data-camera="firstPerson">1. Şahıs</button>
+            <button class="camera-option" data-camera="free">Serbest</button>
+        </div>
+    </div>
 
     <div class="threejs-journey is-hover-none js-threejs-journey">
         <div class="message js-message">
